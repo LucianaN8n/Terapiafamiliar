@@ -1,307 +1,320 @@
-(function(){
-  "use strict";
 
-  // -------------------- Refs / Helpers --------------------
-  const $ = (s)=>document.querySelector(s);
-  const el = {
-    terapeuta: $("#terapeuta"), cliente: $("#cliente"), nascimento: $("#nascimento"),
-    intensidade: $("#intensidade"), queixa: $("#queixa"), tempo: $("#tempo"),
-    efeitos: $("#efeitos"), modo: $("#modo"),
-    btnGerar: $("#btnGerar"), btnReset: $("#btnReset"), btnPDF: $("#btnPDF"),
-    report: $("#report")
-  };
-  const must=(x)=>String(x||"").trim();
-  const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+// Mentor — Terapia Familiar e de Casais (ISC)
+// Zero eval, sem libs externas; imprime via window.print.
 
-  function parseDateFlex(v){
-    if(!v) return "—";
-    const d=String(v).replace(/\D+/g,"");
-    if(d.length===8) return d.slice(0,2)+"/"+d.slice(2,4)+"/"+d.slice(4);
-    if(d.length===6){ let yy=+d.slice(4); yy+= yy<=29?2000:1900; return d.slice(0,2)+"/"+d.slice(2,4)+"/"+yy; }
-    const m=String(v).match(/(\d{1,2}).*?(\d{1,2}).*?(\d{2,4})/);
-    if(m){ let yy=+m[3]; if(yy<100) yy+= yy<=29?2000:1900; return `${m[1].padStart(2,"0")}/${m[2].padStart(2,"0")}/${yy}`; }
-    return v;
+const el = (id) => document.getElementById(id);
+const saidaCard = el('saidaCard');
+const saida = el('saida');
+
+// Vocabulário para classificação leve
+const routes = [
+  {cat: "Dependência Emocional", keys: ["ciúme","ciumes","controle","controla","checar","aprovação","posse","dependente","apego ansioso"]},
+  {cat: "Relacionamentos Tóxicos", keys: ["xingar","desqualifica","gaslighting","gas-lighting","humilha","ameaça","tóxico","toxica","abusivo","abuso"]},
+  {cat: "Terapia Familiar e de Casal", keys: ["desalinhados","distância","conexão","discussão","briga","rotina","reconexão","conflito","comunicação"]},
+  {cat: "Terapia em Lutos e Perdas", keys: ["luto","perda","morte","falecimento","saudade","culpa","enlutado"]},
+  {cat: "Educação Parental", keys: ["filho","filhos","adolescente","criança","parental","pais","limites","regra","castigo","comportamento","tarefa"]},
+  {cat: "Terapia do Imago e Comunicação Assertiva", keys: ["não me ouve","nao me ouve","escuta","imago","comunicação","assertiva","validar","eu-mensagem"]},
+  {cat: "Educação Parental e Terapia Estratégica", keys: ["birra","birras","rotina","acordos","estratégica","estrategica","paradoxo","tarefa paradoxal"]},
+  {cat: "Terapia Estrutural e Transgeracional", keys: ["triangulação","triangulacao","genograma","fronteira","coalizão","coalizao","transgeracional","padrões","padroes","parentificação","parentificacao","minuchin"]},
+];
+
+// Banco de técnicas (resumo do material enviado)
+const TECNICAS = {
+  "Imago": {
+    titulo: "Exercício de Ressignificação — Diálogo de Imago",
+    quando: "Brigas repetitivas, sensação de 'não sou ouvido', ciclo perseguidor–evitador.",
+    objetivo: [
+      "Transformar críticas/defesas em compreensão e conexão.",
+      "Ressignificar gatilhos do 'par invisível' (imprints infantis)."
+    ],
+    passos: [
+      "Defina papéis: Emissor (fala) e Receptor (espelha). Sem interrupções.",
+      "Emissor: 'Quando ____, eu me sinto ____ e preciso de ____.'",
+      "Receptor espelha: 'Se entendi, quando ____, você se sente ____ e precisa de ____. É isso?'",
+      "Validação: 'Faz sentido você se sentir assim porque ____.'",
+      "Empatia: 'Imagino que isso traga ____/medo de ____/dor em ____.'",
+      "Ressignificação: conectar com imagem raiz (infância). Receptor oferece simbolicamente o que faltou.",
+      "Contrato de 7 dias: 1 microcomportamento observável por pessoa."
+    ],
+    tarefa: "3 diálogos curtos/semana + Diário do Insight (3 linhas/dia).",
+    metricas: "Interrupções por diálogo; escala 0–10 'sinto-me ouvido'."
+  },
+  "CNV": {
+    titulo: "CNV Focada + Assertividade",
+    quando: "Críticas difusas, 'você nunca/sempre', sarcasmo.",
+    objetivo: ["Reduzir ataques/defesas", "Estruturar pedidos claros e negociáveis"],
+    passos: [
+      "Observação: descreva o fato sem julgamento.",
+      "Sentimento: nomeie 1–2 emoções.",
+      "Necessidade: o que é importante para você nesse contexto.",
+      "Pedido: específico, positivo, com tempo e contexto (teste de 7 dias)."
+    ],
+    tarefa: "1 conversa por dia (tema leve) usando CNV.",
+    metricas: "Qtd. de conversas concluídas sem escalada (meta crescente)."
+  },
+  "TimeOut": {
+    titulo: "Ritual de Time-Out e Reconexão",
+    quando: "Escalada iminente (voz alta, interrupções, taquicardia).",
+    objetivo: ["Interromper escaladas", "Retomar com clareza e limite de tempo"],
+    passos: [
+      "Código pré-acordado (palavra/gesto).",
+      "Pausa 20–40 min com regulação (respiração 4–6, água, caminhar).",
+      "Retorno marcado: 'Voltamos às __:__ por 15 min com CNV.'",
+      "Fechamento: 1 coisa que funcionou + 1 ajuste."
+    ],
+    tarefa: "Ensaiar 2 vezes/semana, mesmo sem conflito.",
+    metricas: "Tempo de escalada antes de acionar pausa; nº de reconexões realizadas."
+  },
+  "Checkin": {
+    titulo: "Check-in 10–10–10",
+    quando: "Distância emocional; pouca conexão.",
+    objetivo: ["Manutenção do vínculo", "Prevenir acúmulo de microfrustrações"],
+    passos: [
+      "10 min para A falar.",
+      "10 min para B falar.",
+      "10 min para 'nós' (1 microação planejada)."
+    ],
+    tarefa: "3× por semana.",
+    metricas: "Escala 0–10 de conexão semanal."
+  },
+  "DiarioCiume": {
+    titulo: "Diário do Ciúme + Prevenção de Resposta",
+    quando: "Ciúme/checar celular, controle, dependência emocional.",
+    objetivo: ["Tornar o ciúme observável", "Desacoplar controle do impulso"],
+    passos: [
+      "Registrar gatilho → pensamento → emoção → impulso.",
+      "Aguardar 20–30 min antes de checar.",
+      "Comunicar com eu-mensagem/planejar conversa CNV."
+    ],
+    tarefa: "Diário por 14 dias.",
+    metricas: "Redução de checks/dia; aumento da latência."
+  },
+  "Luto": {
+    titulo: "Roda do Luto & Ritual de Despedida",
+    quando: "Perda recente, culpa, saudade persistente.",
+    objetivo: ["Integrar significados", "Avançar nas tarefas do luto"],
+    passos: [
+      "Identificar estágio predominante.",
+      "Carta não enviada (o que ficou por dizer).",
+      "Ritual simbólico (data/local/fala de despedida).",
+      "Plano de cuidado individual e do casal/família."
+    ],
+    tarefa: "5 min/dia com a memória + 1 gesto de cuidado.",
+    metricas: "Oscilação de intensidade; capacidade de retomar rotinas."
+  },
+  "Parental": {
+    titulo: "Aliança Parental & Regras de Coparentalidade",
+    quando: "Divergência na criação; inconsistência de regras.",
+    objetivo: ["Previsibilidade para os filhos", "Unidade parental"],
+    passos: [
+      "Mapa de 3 valores não negociáveis.",
+      "Top 5 regras curtas, positivas e observáveis.",
+      "Consequências combinadas, proporcionais e sem humilhação.",
+      "Reunião semanal (20 min) para revisar e ajustar.",
+      "Ritual de reparo pós-conflito com filhos."
+    ],
+    tarefa: "Colar regras visíveis; diário de consistência (sim/não).",
+    metricas: "Divergências entre pais por semana."
+  },
+  "Escultura": {
+    titulo: "Escultura Familiar Breve (Estrutural)",
+    quando: "Coalizões/Fracas fronteiras geracionais; triangulações.",
+    objetivo: ["Tornar visíveis fronteiras", "Reestruturar proximidades"],
+    passos: [
+      "Cada membro posiciona os demais (distância/orientação).",
+      "Explorar significado da distância.",
+      "Reestruturar: aproximar díades funcionais e reforçar fronteiras geracionais.",
+      "Ensaiar interação nas novas posições."
+    ],
+    tarefa: "Foto/esboço da nova escultura; 1 gesto/dia que confirma a posição.",
+    metricas: "Conflitos por triangulação/semana."
+  },
+  "Genograma": {
+    titulo: "Genograma Transgeracional Focado em Vínculo",
+    quando: "Repetições de ciúme/abandono/segredos; lealdades invisíveis.",
+    objetivo: ["Mapear scripts herdados", "Criar atos de interrupção"],
+    passos: [
+      "3 gerações com símbolos de rupturas/lutos.",
+      "Marcar crenças herdadas-chave.",
+      "Perguntar: 'O que repito sem perceber?' e definir ato de interrupção."
+    ],
+    tarefa: "Carta 'Eu paro aqui' (1 página), lida em sessão.",
+    metricas: "Consciência de padrão (0–10); nº de atos/semana."
+  },
+  "Paradoxo": {
+    titulo: "Tarefa Paradoxo-Leve (Estratégica)",
+    quando: "Brigas previsíveis; insistência em 'provar ponto'.",
+    objetivo: ["Desarmar controle/escalada por via paradoxal"],
+    passos: [
+      "Horário oficial para discutir (ex.: 19:30–19:45).",
+      "Fora desse bloco, discussão é proibida (regra do humor).",
+      "Cartões de fala (2 por pessoa). Acabou, encerra."
+    ],
+    tarefa: "Aplicar 7 dias; registrar intensidade pós-bloco (0–10).",
+    metricas: "Queda de intensidade/semana."
+  },
+  "Funcoes": {
+    titulo: "Reatribuição de Papéis & Contrato de Funções (Estrutural)",
+    quando: "Parentificação de filhos; triangulação crônica.",
+    objetivo: ["Devolver funções aos pais", "Proteger fronteiras geracionais"],
+    passos: [
+      "Listar tarefas/papéis do filho como 'quase-cônjuge'.",
+      "Redistribuir para o adulto competente.",
+      "Contrato: quando X, adulto Y assume; filho Z fica fora."
+    ],
+    tarefa: "Checklist semanal + reforço positivo visível.",
+    metricas: "Vezes que o filho é puxado ao conflito (meta 0)."
+  },
+  "Impacto15": {
+    titulo: "Protocolo Assertivo de Alto Impacto (3 Etapas)",
+    quando: "Tema único difícil, necessidade de resolução rápida.",
+    objetivo: ["Resolver 1 tema em 15–20 min", "Gerar ajuste testável de 7 dias"],
+    passos: [
+      "Contexto & boa intenção ('Quero resolver isso para ficarmos bem').",
+      "Fato–Sentimento–Pedido (3 min por pessoa).",
+      "Negociar 1 ajuste testável por 7 dias + definir métrica."
+    ],
+    tarefa: "Reavaliar em 7 dias; manter ou ajustar.",
+    metricas: "Taxa de cumprimento do ajuste; satisfação 0–10."
   }
-  const normalizeAscii=(s)=>String(s||"").replace(/[“”„]/g,'"').replace(/[‘’]/g,"'").replace(/–|—/g,"-");
+};
 
-  // -------------------- Catálogo / Regras --------------------
-  const CAT = {
-    ansiedade:["Mindfulness – Atenção Plena","Florais de bach","Auriculoterapia","Reiki usui tibetano nível 1 ao mestrado","Cromoterapia","PNL – Programação Neurolinguística","Ho’oponopono","Chakras"],
-    insonia:["Aromaterapia","Meditação","Reiki usui tibetano nível 1 ao mestrado","Cromoterapia","Mindfulness – Atenção Plena","Florais de bach"],
-    dor:["Reflexologia Podal","Ventosaterapia","Moxaterapia","Massagem com óleos essenciais","Fitoterapia","Biomagnetismo","Cristaloterapia"],
-    digestivo:["Psicossomática","Fitoterapia","Reflexologia Podal","Aromaterapia","Mindfulness – Atenção Plena","Cromoterapia"],
-    cefaleia:["Auriculoterapia","Cromoterapia","Reflexologia Podal","Reiki usui tibetano nível 1 ao mestrado","Cristaloterapia"],
-    depressao:["Florais de bach","Mindfulness – Atenção Plena","PNL – Programação Neurolinguística","Reiki usui tibetano nível 1 ao mestrado","Crenças limitantes","Ho’oponopono"],
-    prosperidade:["Cocriando Prosperidade","Radiestesia","Mesa Radiônica Universal","Runas draconianas","Soramig astral money reiki","Constelação com Mesa Radiônica"],
-    relacionamento:["Ho’oponopono","Constelação com Mesa Radiônica","PNL – Programação Neurolinguística","Florais de minas","Registros akáshicos"],
-    feminino:["Reiki do Sagrado Feminino","Chakras","Ginecologia natural disponível","Cristaloterapia","Florais de minas"],
-    trauma:["Apometria","Registros akáshicos","Reiki xamânico mahe’o nível 1 ao mestrado","Terapia dos sonhos","Mesa Apométrica"],
-    espiritual:["Reiki celestial","As 7 leis herméticas","Arcanjos de cura","Cortes Cármicos com Arcanjo Miguel","Magia das Velas","Magia dos Nós"],
-    energia_limpeza:["Limpeza energética","Radiestesia","Mesa Radiônica Universal","Cromoterapia","Magia das Velas"],
-    estudos_foco:["PNL – Programação Neurolinguística","Mindfulness – Atenção Plena","Chakras","Cristaloterapia"],
-    projeção:["Projeção Astral","Leitura da Alma","Registros akáshicos","Anjos de Cura"]
-  };
-  // técnicas corporais (bloqueadas no modo online)
-  const CORPORAIS = new Set(["Reflexologia Podal","Ventosaterapia","Moxaterapia","Massagem com óleos essenciais","Auriculoterapia"]);
+// Tabelas por categoria
+const CAT_TO_TECHS = {
+  "Dependência Emocional": ["Imago","CNV","TimeOut","DiarioCiume","Impacto15"],
+  "Relacionamentos Tóxicos": ["CNV","TimeOut","Paradoxo","Impacto15"],
+  "Terapia Familiar e de Casal": ["Imago","Checkin","CNV","Impacto15"],
+  "Terapia em Lutos e Perdas": ["Luto","CNV","Impacto15"],
+  "Educação Parental": ["Parental","Impacto15"],
+  "Terapia do Imago e Comunicação Assertiva": ["Imago","CNV","Checkin","Impacto15"],
+  "Educação Parental e Terapia Estratégica": ["Parental","Paradoxo","Impacto15"],
+  "Terapia Estrutural e Transgeracional": ["Escultura","Genograma","Funcoes","Impacto15"]
+};
 
-  const KEYMAP = [
-    {rx:/ansiedad|p[aâ]nico|nervos|agita[cç][aã]o/i, key:"ansiedade"},
-    {rx:/ins[oô]ni|insoni|sono|acordar/i, key:"insonia"},
-    {rx:/dor|lombar|cervic|tens|m[uú]sc|costas|ombro/i, key:"dor"},
-    {rx:/gastrit|reflux|est[oô]m|digest|azia|n[aá]usea/i, key:"digestivo"},
-    {rx:/cefale|enxaquec|cabe[çc]a/i, key:"cefaleia"},
-    {rx:/depress|apatia|anhedoni/i, key:"depressao"},
-    {rx:/prosper|finan|dinhei|abund/i, key:"prosperidade"},
-    {rx:/relacion|fam[ií]l|casam|parceir|comunica/i, key:"relacionamento"},
-    {rx:/femin|ciclo|tpm|menop|fertilidade/i, key:"feminino"},
-    {rx:/trauma|luto|abuso|pesad|p[óo]s-traum/i, key:"trauma"},
-    {rx:/espirit|f[eé]|sutil|m[ií]stic/i, key:"espiritual"},
-    {rx:/limpeza|miasma|obsess/i, key:"energia_limpeza"},
-    {rx:/foco|estudo|aten[cç][aã]o/i, key:"estudos_foco"},
-    {rx:/proje[cç][aã]o|astral|alma/i, key:"projeção"}
+function classify(queixa){
+  const q = (queixa||"").toLowerCase();
+  let best = "Terapia Familiar e de Casal";
+  for(const r of routes){
+    for(const k of r.keys){
+      if(q.includes(k)){ return r.cat; }
+    }
+  }
+  return best;
+}
+
+function plan4weeks(cat){
+  // Plano genérico com microtarefas
+  const linhas = [
+    {semana:"Semana 1 — Mapeamento & Alívio Rápido", itens:[
+      "Psicoeducação breve sobre o padrão identificado.",
+      "1 técnica base aplicada em sessão (roteiro assistido).",
+      "Tarefa diária de 10–15 min (microação)."
+    ]},
+    {semana:"Semana 2 — Treino de Comunicação & Fronteiras", itens:[
+      "2 ensaios guiados com feedback.",
+      "Contrato de 7 dias com comportamentos observáveis."
+    ]},
+    {semana:"Semana 3 — Consolidação & Prevenção de Recaída", itens:[
+      "Ritual de reparo pós-conflito.",
+      "Métricas simples (0–10) e revisão de gatilhos."
+    ]},
+    {semana:"Semana 4 — Autonomia & Próximos Passos", itens:[
+      "Checklist do que funcionou e do que manter.",
+      "Plano de manutenção (1 encontro/semana por 20 min)."
+    ]},
   ];
+  return linhas;
+}
 
-  function hash(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=(h*16777619)>>>0;}return h>>>0;}
+function renderTecnica(key){
+  const t = TECNICAS[key];
+  if(!t) return "";
+  const li = (arr)=> arr.map(x=>`<li>${x}</li>`).join("");
+  return `
+  <div class="block">
+    <strong>${t.titulo}</strong>
+    <div class="muted">Quando usar: ${t.quando}</div>
+    <div><em>Objetivos</em>:</div>
+    <ul>${li(t.objetivo)}</ul>
+    <div><em>Passo a passo</em>:</div>
+    <ol>${t.passos.map(x=>`<li>${x}</li>`).join("")}</ol>
+    <div><em>Tarefa de casa</em>: ${t.tarefa}</div>
+    <div><em>Métricas</em>: ${t.metricas}</div>
+  </div>`;
+}
 
-  function chooseTechniques(ctxText, modo){
-    const cats=[]; for(const k of KEYMAP) if(k.rx.test(ctxText)) cats.push(k.key);
-    if(cats.length===0) cats.push("ansiedade");
-    const h=hash(ctxText), picks=[];
-    for(const c of cats){
-      const arr=(CAT[c]||[]).filter(t=> modo==="online" ? !CORPORAIS.has(t) : true);
-      const start = arr.length ? h % arr.length : 0;
-      for(let i=0;i<arr.length && picks.length<3;i++){
-        const t=arr[(start+i)%arr.length]; if(t && !picks.includes(t)) picks.push(t);
-      }
-      if(picks.length>=3) break;
-    }
-    if(picks.length<3){
-      for(const c in CAT){ for(const t of CAT[c]){
-        if(modo==="online" && CORPORAIS.has(t)) continue;
-        if(picks.length>=3) break; if(!picks.includes(t)) picks.push(t);
-      } if(picks.length>=3) break; }
-    }
-    return picks.slice(0,3);
-  }
+function gerarProtocolo(){
+  const terapeuta = el('terapeuta').value.trim() || "—";
+  const cliente = el('cliente').value.trim() || "—";
+  const queixa = el('queixa').value.trim();
+  if(!queixa){ alert("Descreva a queixa principal."); return; }
 
-  // Aromaterapia baseada no contexto
-  function aromaterapiaBlend(ctx){
-    if(/ins[oô]ni|insoni|sono/.test(ctx)) return {blend:"Lavanda 3gts + Bergamota 2gts + Camomila-romana 1gt", posologia:"Difusor 30–45 min antes de deitar (3–6 gts/200 mL). Inalação 2 respirações em picos.", cuidados:"Cítricos fotossensíveis na pele; dose baixa em gestantes/crianças."};
-    if(/ansiedad|p[aâ]nico|nervos/.test(ctx)) return {blend:"Lavanda 3gts + Laranja-doce 2gts + Vetiver 1gt", posologia:"Difusor 20–30 min 2×/dia; inalação 2–3 respirações.", cuidados:"Vetiver é denso (1 gt). Evite dirigir se ficar sonolento."};
-    if(/cefale|enxaquec|cabe[çc]a/.test(ctx)) return {blend:"Hortelã-pimenta 1gt + Lavanda 2gts + Manjerona 1gt (em 10 mL óleo vegetal)", posologia:"Aplicar pouca quantidade na nuca/templos 1–2×/dia; evitar olhos.", cuidados:"Evitar hortelã em <6 anos, gestantes e epilépticos."};
-    if(/gastrit|reflux|est[oô]m|digest|azia|n[aá]usea/.test(ctx)) return {blend:"Camomila-alemã 2gts + Erva-doce 2gts + Gengibre 1gt (em 20 mL OV)", posologia:"Massagem no abdome sentido horário 1–2×/dia 3–5 min; difusor Lavanda 3–4 gts à noite.", cuidados:"Evitar hortelã em refluxo ativo; gengibre é aquecedor."};
-    return {blend:"Lavanda 3gts + Laranja-doce 2gts", posologia:"Difusor 20–30 min 1–2×/dia.", cuidados:"Cítricos na pele + sol não."};
-  }
+  const cat = classify(queixa);
+  const techs = CAT_TO_TECHS[cat] || ["Imago","CNV","Impacto15"];
+  const plano = plan4weeks(cat);
 
-  function parecerDetalhado(queixa, efeitos, intensidade){
-    const q=(queixa+" "+efeitos).toLowerCase();
-    let sint="Quadro com impacto funcional e oscilação autonômica; pede estabilização e integração mente–corpo.";
-    let oculto="Padrão de controle/evitação mantém ativação interna e ciclos de tensão.";
-    let crit="Regulação do SNA, liberação somática e reorganização de hábitos.";
-    let sinais=["Redução da escala 0–10","Sono/energia melhores","Menos tensão regional"];
-    if(/ins[oô]ni|insoni|sono/.test(q)){sint="Insônia com hiperalerta noturno e ruminação."; oculto="Ritual de sono inconsistente e condicionamento de alerta."; crit="Aromaterapia límbica, mindfulness e harmonização energética."; sinais=["Latência menor","Menos despertares","Mais descanso"]; }
-    else if(/gastrit|reflux|est[oô]m|digest|azia|n[aá]usea/.test(q)){sint="Sintomas GI por estresse/hipervigilância visceral."; oculto="Somatização de preocupações no estômago."; crit="Desativar ameaça, favorecer digestão parasimpática."; sinais=["Menos azia","Conforto pós-refeição","Menos dor abdominal"]; }
-    else if(/dor|lombar|cervic|tens|m[uú]sc|costas|ombro/.test(q)){sint="Dor miofascial com proteção muscular."; oculto="Ciclo tensão→dor→proteção."; crit="Liberação mecânica suave + reflexos somatoautonômicos."; sinais=["Mais ADM","Menos dor ao fim do dia","Sono melhor"]; }
-    else if(/depress|apatia|anhedoni/.test(q)){sint="Humor deprimido com baixa motivação."; oculto="Narrativa autocrítica mantém evitação."; crit="Ritmos, simbolização (floral/PNL) e pequenos ganhos."; sinais=["Mais interesse","Rotina estável","Auto-relatos positivos"]; }
-    if(+intensidade>=8) crit += " Intensidade elevada: progredir devagar e aumentar grounding/suporte.";
-    return {sintese:sint, oculto, criterio:crit, sinais};
-  }
+  const hoje = new Date().toLocaleDateString("pt-BR");
+  let html = `
+    <div class="tag">${cat}</div>
+    <h3>Síntese Clínica</h3>
+    <p>${queixa ? 'Com base na queixa descrita, identifica-se um padrão compatível com <strong>'+cat+'</strong>, com manutenção por reforços (emoções não validadas, fronteiras difusas, escalada por comunicação defensiva).': ''}</p>
 
-  function checklist(ctx,intensidade){
-    const C=[];
-    if(/gestant|gravidez|gr[áa]vida/.test(ctx)) C.push("Gestante: evitar ventosas/moxa; dose baixa em aromaterapia; fitoterapia apenas segura.");
-    if(/hipertens|press[aã]o alta/.test(ctx)) C.push("Hipertensão: cautela com ventosas fortes e óleos estimulantes (alecrim).");
-    if(/anticoag|varfarin|clopidogrel/.test(ctx)) C.push("Anticoagulante: evitar ventosas/massagens vigorosas; atenção a fitoterápicos que alteram coagulação.");
-    if(/fluoxetina|sertralin|escitalopram|paroxetin|isrs/.test(ctx)) C.push("ISRS (ex.: fluoxetina): evitar Erva-de-São-João; aromaterapia suave ok.");
-    if(/benzodiaz|diazep|clonazepam|alprazolam/.test(ctx)) C.push("Benzodiazepínicos: evitar sedativos acumulativos; priorizar técnicas não-farmacológicas.");
-    if(/dermatit|ferida|les[aã]o cut/.test(ctx)) C.push("Lesão/pele sensível: evitar irritantes e ventosas na área.");
-    if(/epileps/.test(ctx)) C.push("Epilepsia: evitar estímulos luminosos intensos; aromaterapia sem alecrim.");
-    if(intensidade>=8) C.push("Queixa ≥8/10: reduzir carga, fracionar, aumentar grounding/ancoragens.");
-    if(C.length===0) C.push("Sem alertas críticos informados; manter bom senso clínico e consentimento.");
-    return C;
-  }
+    <h3>Hipótese Funcional</h3>
+    <p>O ciclo se mantém por gatilhos específicos que disparam emoções intensas, seguidas de respostas automáticas (ataque/defesa/controle/evitação). Intervenções focam <strong>validação + fronteiras + microacordos</strong> e treino de <strong>comunicação assertiva</strong>.</p>
 
-  function comoPorQue(nome, ctx){
-    const base={como:"Aplicação progressiva com monitoramento.", porque:"Favorece regulação autonômica e integração corpo–mente."};
-    const A=aromaterapiaBlend(ctx);
-    const map={
-      "Mindfulness – Atenção Plena":{como:"3 blocos/dia (5–8 min): respiração diafragmática + ancoragem sensorial; 1 sessão guiada/semana.", porque:"Reduz hiperalerta e ruminação."},
-      "Meditação":{como:"10–12 min/dia guiada (relaxamento/sono).", porque:"Desacelera a mente e melhora latência do sono."},
-      "Aromaterapia":{como:`Sinergia: ${A.blend}. ${A.posologia}`, porque:`Cuidados: ${A.cuidados}`},
-      "Auriculoterapia":{como:"Shen Men / Rim / Ansiedade; estímulo 3×/dia por 30–60s.", porque:"Equilíbrio neuroenergético e redução de picos."},
-      "Reflexologia Podal":{como:"Plexo solar → sistema-alvo → pontos dolorosos (6–8s) por 12–18 min.", porque:"Reflexos somatoautonômicos aliviam dor."},
-      "Ventosaterapia":{como:"Cups estáticas/deslizantes 5–8 min.", porque:"Libera fáscia e reduz tensão protetiva."},
-      "Moxaterapia":{como:"20–30s por ponto, 3 repetições.", porque:"Aquece e dinamiza fluxo energético."},
-      "Massagem com óleos essenciais":{como:"Deslizamentos leves 15–25 min; diluição 1–2%.", porque:"Libera tensão e regula SNA."},
-      "Fitoterapia":{como:"Infusões leves: camomila/passiflora à noite; checar interações.", porque:"Suporte fisiológico suave."},
-      "Florais de bach":{como:"Fórmula personalizada 4×/dia (4 gotas) por 21 dias.", porque:"Trabalha núcleos emocionais com suavidade."},
-      "PNL – Programação Neurolinguística":{como:"Submodalidades + ancoragem + ensaio mental.", porque:"Reprograma respostas automáticas."}
-    };
-    return map[nome] || base;
-  }
+    <h3>Objetivos</h3>
+    <ul>
+      <li>Reduzir escaladas e aumentar sensação de ser ouvido.</li>
+      <li>Estabelecer contratos de comportamento observáveis por 7 dias.</li>
+      <li>Fortalecer vínculo/aliança (check-ins, reparos) e proteção de fronteiras.</li>
+    </ul>
 
-  function plano7(tec){
-    const [t1,t2,t3]=tec;
-    return [
-      `Dia 1 — Sessão: acolhimento, métrica 0–10, ${t1} leve;  Casa: respiração 4-4-6 (3×/dia, 5 min).`,
-      `Dia 2 — Sessão: ${t1} com progressão;                      Casa: ritual noturno + diário (3 linhas).`,
-      `Dia 3 — Sessão: introdução de ${t2};                       Casa: grounding 5-4-3-2-1 (2×/dia).`,
-      `Dia 4 — Sessão: ${t1}+${t2} integrados;                    Casa: registrar pensamentos automáticos (3).`,
-      `Dia 5 — Sessão: introdução de ${t3||"reforço do t1/t2"};    Casa: prática combinada 10–15 min.`,
-      `Dia 6 — Sessão: consolidação + simbolização;               Casa: visualização/afirmação alinhada.`,
-      `Dia 7 — Sessão: reavaliação 0–10 e ajustes;                Casa: plano de continuidade (2 semanas).`
-    ].join("\n");
-  }
+    <h3>Técnicas Selecionadas</h3>
+    ${techs.slice(0,3).map(renderTecnica).join("")}
 
-  function montarRelatorio(){
-    const terapeuta=must(el.terapeuta.value), cliente=must(el.cliente.value);
-    const nasc=parseDateFlex(el.nascimento.value), intensidade=clamp(+(el.intensidade.value||0),0,10);
-    const queixa=must(el.queixa.value), tempo=must(el.tempo.value), efeitos=must(el.efeitos.value);
-    const modo=(el.modo && el.modo.value)||"presencial";
-    if(!cliente||!queixa) throw new Error("Preencha pelo menos Cliente e Queixa.");
+    <h3>Plano de Ação (4 Semanas)</h3>
+    <ul>
+      ${plano.map(p=>`<li><strong>${p.semana}:</strong> ${p.itens.join(" • ")}</li>`).join("")}
+    </ul>
 
-    const ctx=(queixa+" "+efeitos).toLowerCase();
-    const tec=chooseTechniques(ctx, modo);
-    const pr=parecerDetalhado(queixa, efeitos, intensidade);
-    const chk=checklist(ctx,intensidade);
+    <h3>Métricas Simples</h3>
+    <ul>
+      <li>Conexão percebida (0–10) — registrar 2×/semana.</li>
+      <li>Nº de discussões com time-out aplicado e reconexão marcada.</li>
+    </ul>
 
-    const tecnicasDet = tec.map((t,i)=>{
-      const {como,porque}=comoPorQue(t, ctx);
-      return `${i+1}) ${t}\n   • Como usar: ${como}\n   • Por que nesta sessão: ${porque}`;
-    }).join("\n\n");
+    <p class="muted">Gerado em ${hoje} • Terapeuta: ${terapeuta} • Cliente(s): ${cliente}</p>
+  `;
 
-    const plano = plano7(tec);
+  saida.innerHTML = html;
+  saidaCard.classList.remove('hidden');
+  window.scrollTo({top: saidaCard.offsetTop-12, behavior: 'smooth'});
+}
 
-    return [
-      `Relatório  Instituto Saber Consciente`,
-      `Terapeuta: ${terapeuta||"—"}   Cliente: ${cliente}   Nasc.: ${nasc}   Atendimento: ${modo.toUpperCase()}`,
-      `Queixa: ${queixa}   Intensidade: ${intensidade}/10   Tempo: ${tempo}`,
-      `Efeitos: ${efeitos||"—"}`, "",
-      "SÍNTESE DO CASO", pr.sintese, "",
-      "O QUE ESTÁ OCULTO", pr.oculto, "",
-      "CRITÉRIO DO GESTOR", pr.criterio, "",
-      "TÉCNICAS ESCOLHIDAS (máx. 3)", tecnicasDet, "",
-      "PLANO DE INTERVENÇÃO — 7 DIAS (Sessão vs. Casa)", plano, "",
-      "SINAIS DE PROGRESSO ESPERADOS", "• "+pr.sinais.join("\n• "), "",
-      "CHECKLIST DE SEGURANÇA", "• "+chk.join("\n• ")
-    ].join("\n");
-  }
-
-  // -------------------- PDF (v6.4) com wrap, margens e rodapé --------------------
-  const PDF=(function(){
-    const MAP={"á":0xe1,"à":0xe0,"â":0xe2,"ã":0xe3,"ä":0xe4,"Á":0xc1,"À":0xc0,"Â":0xc2,"Ã":0xc3,"Ä":0xc4,"é":0xe9,"è":0xe8,"ê":0xea,"É":0xc9,"È":0xc8,"Ê":0xca,"í":0xed,"ì":0xec,"Í":0xcd,"Ì":0xcc,"ó":0xf3,"ò":0xf2,"ô":0xf4,"õ":0xf5,"Ó":0xd3,"Ò":0xd2,"Ô":0xd4,"Õ":0xd5,"ú":0xfa,"ù":0xf9,"Ú":0xda,"Ù":0xd9,"ç":0xe7,"Ç":0xc7,"ñ":0xf1,"Ñ":0xd1,"ü":0xfc,"Ü":0xdc};
-    const normalize=(s)=>String(s||"").replace(/[“”„]/g,'"').replace(/[‘’]/g,"'").replace(/–|—/g,"-");
-    function esc(s){
-      s=normalize(s); let out="";
-      for(const ch of s){
-        if(ch==="(") out+="\\("; else if(ch===")") out+="\\)"; else if(ch==="\\") out+="\\\\";
-        else { const code=ch.charCodeAt(0);
-          if(code>=32 && code<=126) out+=ch;
-          else if(MAP[ch]!==undefined) out+="\\"+("00"+MAP[ch].toString(8)).slice(-3);
-          else out+=" ";
-        }
-      } return out;
-    }
-    const bytelen=(t)=>new TextEncoder().encode(String(t)).length;
-
-    function wrapLines(text, charsPerLine){
-      const out=[];
-      for(const raw of String(text||"").split(/\r?\n/)){
-        const line=raw.replace(/\s+$/,"");
-        if(line===""){ out.push(""); continue; }
-        let cur="";
-        for(const word of line.split(/\s+/)){
-          const probe=(cur?cur+" ":"")+word;
-          if(probe.length>charsPerLine){
-            if(cur) out.push(cur);
-            if(word.length>charsPerLine){
-              let i=0; while(i<word.length){ out.push(word.slice(i,i+charsPerLine)); i+=charsPerLine; }
-              cur="";
-            }else cur=word;
-          }else cur=probe;
-        }
-        if(cur) out.push(cur);
-      }
-      return out;
-    }
-
-    function gen({bodyText, footerLeft, footerRight}){
-      const W=595.28, H=841.89;
-      const Mx=54, MyTop=54, MyBottom=54;
-      const FS=12, LH=16;
-      const usableH=H-(MyTop+MyBottom);
-      const charsPerLine=Math.floor((W-2*Mx)/(FS*0.56));
-
-      const lines=wrapLines(bodyText, charsPerLine);
-      const linesPerPage=Math.max(1, Math.floor(usableH/LH)-2); // reserva 2 linhas p/ rodapé
-
-      const pages=[];
-      for(let i=0;i<lines.length;i+=linesPerPage) pages.push(lines.slice(i,i+linesPerPage));
-      if(!pages.length) pages.push(["(vazio)"]);
-
-      let objs=[], id=1;
-      const add=(c)=>{const s=`${id} 0 obj\n${c}\nendobj\n`; objs.push(s); return id++;};
-
-      const font=add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
-      const pids=[];
-      pages.forEach((L,idx)=>{
-        let stream=`BT\n/F1 ${FS} Tf\n1 0 0 1 ${Mx} ${H-MyTop} Tm\n`;
-        let first=true;
-        for(const ln of L){ const e=esc(ln); if(first){stream+=`(${e}) Tj\n`; first=false;} else {stream+=`0 -${LH} Td\n(${e}) Tj\n`;} }
-        // rodapé
-        const footY=MyBottom-18;
-        const left=esc(footerLeft||""); const right=esc(footerRight||"");
-        stream+=`ET\nBT\n/F1 10 Tf\n1 0 0 1 ${Mx} ${footY} Tm\n(${left}) Tj\n`;
-        const approxRight = right.length*10*0.56;
-        const posRightX=Math.max(Mx, W-Mx-approxRight);
-        stream+=`1 0 0 1 ${posRightX} ${footY} Tm\n(${right}) Tj\nET`;
-
-        const cid=add(`<< /Length ${bytelen(stream)} >>\nstream\n${stream}\nendstream`);
-        const pid=add(`<< /Type /Page /Parent 0 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 ${font} 0 R >> >> /Contents ${cid} 0 R >>`);
-        pids.push(pid);
-      });
-
-      const kids=pids.map(i=>`${i} 0 R`).join(" ");
-      const pagesId=add(`<< /Type /Pages /Kids [ ${kids} ] /Count ${pids.length} >>`);
-      objs=objs.map(o=>o.replace("/Parent 0 0 R", `/Parent ${pagesId} 0 R`));
-      const catalog=add(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
-
-      let pdf="%PDF-1.4\n", offs=[0];
-      for(const o of objs){ offs.push(bytelen(pdf)); pdf+=o; }
-      const xref=bytelen(pdf);
-      let xr=`xref\n0 ${objs.length+1}\n0000000000 65535 f \n`;
-      for(let i=1;i<=objs.length;i++) xr+=String(offs[i]).padStart(10,"0")+" 00000 n \n";
-      const trailer=`trailer\n<< /Size ${objs.length+1} /Root ${catalog} 0 R >>\nstartxref\n${xref}\n%%EOF`;
-      return pdf+xr+trailer;
-    }
-
-    function download(name, bodyText, footerLeft, footerRight){
-      const data=gen({bodyText, footerLeft, footerRight});
-      const blob=new Blob([data],{type:"application/pdf"});
-      const a=document.createElement("a");
-      a.href=URL.createObjectURL(blob); a.download=name; a.click();
-      setTimeout(()=>URL.revokeObjectURL(a.href),1200);
-    }
-    return { download };
-  })();
-
-  // -------------------- Bindings --------------------
-  document.addEventListener("DOMContentLoaded", function(){
-    el.btnGerar?.addEventListener("click", ()=>{
-      try{ el.report.textContent = montarRelatorio(); }
-      catch(e){ console.error(e); alert(e.message || "Falha ao gerar parecer."); }
-    });
-    el.btnReset?.addEventListener("click", ()=>{ el.report.textContent="O parecer aparecerá aqui."; });
-    el.btnPDF?.addEventListener("click", ()=>{
-      const txt = el.report.textContent || "";
-      const hoje = new Date().toISOString().slice(0,10);
-      const cliente = (el.cliente?.value || "—").trim();
-      const name = `Relatorio_${cliente.replace(/\s+/g,"_")}_${hoje}.pdf`;
-      const footerLeft = `Cliente: ${cliente}`;
-      const footerRight = `Data do atendimento: ${hoje}  ·  TH60`;
-      try{ PDF.download(name, txt, footerLeft, footerRight); }
-      catch(e){ console.error(e); alert("Falha ao gerar PDF."); }
-    });
+function copiar(){
+  const tmp = document.createElement('div');
+  tmp.innerHTML = saida.innerText;
+  const texto = tmp.innerText;
+  navigator.clipboard.writeText(texto).then(()=>{
+    alert("Protocolo copiado para a área de transferência.");
   });
+}
 
-})();
+function imprimir(){
+  window.print();
+}
+
+function limpar(){
+  el('terapeuta').value = "";
+  el('cliente').value = "";
+  el('queixa').value = "";
+  saida.innerHTML = "";
+  saidaCard.classList.add('hidden');
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  el('gerar').addEventListener('click', gerarProtocolo);
+  el('copiar').addEventListener('click', copiar);
+  el('imprimir').addEventListener('click', imprimir);
+  el('limpar').addEventListener('click', limpar);
+});
