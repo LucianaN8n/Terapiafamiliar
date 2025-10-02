@@ -303,7 +303,6 @@ function copiar(){
 
 
 async function baixar(){
-  // PDF somente texto (sem html2canvas/DOMPurify)
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({unit:'pt', format:'a4'});
   const margin = 40;
@@ -316,11 +315,7 @@ async function baixar(){
   doc.text('Protocolo — Terapia Familiar e de Casais (ISC)', margin, y);
   y += 22;
 
-  const texto = (saida.innerText || '').replace(/
-
-+/g,'
-
-');
+  const texto = (saida.innerText || '').replace(/\n\n+/g,'\n\n');
   doc.setFont('helvetica','normal'); doc.setFontSize(11);
   const lines = doc.splitTextToSize(texto, maxWidth);
 
@@ -331,12 +326,7 @@ async function baixar(){
   }
   doc.save('protocolo.pdf');
 }
-,
-    margin: [20,20,20,20],
-    autoPaging: 'text',
-    x: 20, y: 20, width: 550
-  });
-}
+
 
 function limpar(){
   el('terapeuta').value = "";
