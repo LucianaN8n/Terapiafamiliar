@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Mentor — Terapia Familiar e de Casais (ISC)</title>
   <link rel="stylesheet" href="styles.css" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:;">
 </head>
 <body>
   <header class="header">
@@ -46,7 +45,7 @@
         <h2>Protocolo Sugerido</h2>
         <div class="right">
           <button id="copiar" class="btn small">Copiar</button>
-          <button id="imprimir" class="btn small">Imprimir/Salvar PDF</button>
+          <button id="baixar" class="btn small">Baixar PDF</button>
         </div>
       </div>
       <div id="saida" class="saida"></div>
@@ -57,6 +56,7 @@
     <small>© Instituto Saber Consciente • Uso educacional. Não substitui avaliação médica/psicológica.</small>
   </footer>
 
+  <script src="vendor/jspdf.umd.min.js"></script>
   <script src="app.js" defer></script>
 </body>
 </html>

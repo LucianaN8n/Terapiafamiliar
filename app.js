@@ -300,8 +300,19 @@ function copiar(){
   });
 }
 
-function imprimir(){
-  window.print();
+
+async function baixar(){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'pt', format:'a4'});
+  const content = saida.innerHTML;
+  doc.html(content, {
+    callback: function (doc) {
+      doc.save("protocolo.pdf");
+    },
+    margin: [20,20,20,20],
+    autoPaging: 'text',
+    x: 20, y: 20, width: 550
+  });
 }
 
 function limpar(){
@@ -315,6 +326,6 @@ function limpar(){
 document.addEventListener('DOMContentLoaded', ()=>{
   el('gerar').addEventListener('click', gerarProtocolo);
   el('copiar').addEventListener('click', copiar);
-  el('imprimir').addEventListener('click', imprimir);
+  el('baixar').addEventListener('click', baixar);
   el('limpar').addEventListener('click', limpar);
 });
